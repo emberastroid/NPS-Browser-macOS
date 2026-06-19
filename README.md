@@ -101,7 +101,7 @@ xcodebuild -project Alamofire/Alamofire.xcodeproj \
 Then copy the correctly-built macOS frameworks into `Carthage/Build/Mac`:
 
 ```bash
-cd ..  # back to project root
+cd ../..  # back to project root
 
 for dep in Fuzi Promises FBLPromises SwiftyBeaver SwiftyUserDefaults RealmSwift Realm Alamofire; do
   src=$(find ~/Library/Developer/Xcode/DerivedData -name "$dep.framework" \
