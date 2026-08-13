@@ -1,0 +1,105 @@
+name: macOS Build Pipeline
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  build-project:
+    runs-on: macos-latest
+
+    steps:
+    # 1. Pull the repository code onto the runner
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    # 2. Ensure Carthage is available (Homebrew comes pre-installed)
+    - name: Install Carthage
+      run: brew install carthage
+
+    # Step 1 — Check out dependencies (Ignore expected initial failure)
+    - name: Carthage Bootstrap (Expected to Fail)
+      run: |
+        carthage bootstrap --platform macOS --no-use-binaries --cache-builds || true
+
+    # Step 2 — Patch deployment targets
+    - name: Patch Deployment Targets
+      run: |
+        find Carthage/Checkouts -name "project.pbxproj" | while read f; do
+          sed -i '' 's/IPHONEOS_DEPLOYMENT_TARGET = [0-9.]*/IPHONEOS_DEPLOYMENT_TARGET = 12.0/g' "$f"
+          sed -i '' 's/MACOSX_DEPLOYMENT_TARGET = 10\.[0-9]*/MACOSX_DEPLOYMENT_TARGET = 10.13/g' "$f"
+        done
+
+    # Step 3 — Build base dependencies
+    - name: Carthage Build Base Dependencies
+      run: carthage build --platform macOS --no-use-binaries
+
+    # Step 4 — Fix iOS-only framework slices (Manual xcodebuild SDK compilation)
+    - name: Build Frameworks Directly via macOS SDK
+      run: |
+        cd Carthage/Checkouts
+
+        xcodebuild -project Fuzi/Fuzi.xcodeproj \
+          -scheme Fuzi -configuration Release -sdk macosx \
+          ONLY_ACTIVE_ARCH=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY= build
+
+        xcodebuild -project promises/Promises.xcodeproj \
+          -scheme Promises -configuration Release -sdk macosx \
+          ONLY_ACTIVE_ARCH=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY= build
+
+        xcodebuild -project promises/Promises.xcodeproj \
+          -scheme FBLPromises -configuration Release -sdk macosx \
+          ONLY_ACTIVE_ARCH=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY= build
+
+        xcodebuild -project SwiftyBeaver/SwiftyBeaver.xcodeproj \
+          -scheme SwiftyBeaver-Package -configuration Release -sdk macosx \
+          ONLY_ACTIVE_ARCH=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY= build
+
+        xcodebuild -project SwiftyUserDefaults/SwiftyUserDefaults.xcodeproj \
+          -scheme SwiftyUserDefaults -configuration Release -sdk macosx \
+          ONLY_ACTIVE_ARCH=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY= build
+
+        xcodebuild -workspace realm-swift/Carthage/Realm.xcworkspace \
+          -scheme RealmSwift -configuration Release -sdk macosx \
+          ONLY_ACTIVE_ARCH=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY= build
+
+        xcodebuild -project Alamofire/Alamofire.xcodeproj \
+          -scheme "Alamofire macOS" -configuration Release -sdk macosx \
+          ONLY_ACTIVE_ARCH=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY= build
+
+    # Step 4 continued — Move compiled macOS frameworks to the local Carthage build destination
+    - name: Copy Frameworks to Carthage Build Directory
+      run: |
+        for dep in Fuzi Promises FBLPromises SwiftyBeaver SwiftyUserDefaults RealmSwift Realm Alamofire; do
+          src=$(find ~/Library/Developer/Xcode/DerivedData -name "$dep.framework" \
+            -path "*/Products/Release/*" ! -path "*ios*" ! -path "*simulator*" 2>/dev/null | head -1)
+          if [ -n "$src" ]; then
+            echo "Copying $dep"
+            rm -rf Carthage/Build/Mac/$dep.framework
+            cp -R "$src" Carthage/Build/Mac/
+          else
+            echo "NOT FOUND: $dep"
+          fi
+        done
+
+    # Step 5 — Copy minizip headers
+    - name: Copy Minizip Headers
+      run: |
+        mkdir -p Carthage/Build/Mac/Zip.framework/Headers/minizip
+        cp Carthage/Checkouts/Zip/Zip/minizip/*.h \
+           Carthage/Build/Mac/Zip.framework/Headers/minizip/
+        cp Carthage/Checkouts/Zip/Zip/minizip/module.modulemap \
+           Carthage/Build/Mac/Zip.framework/Headers/minizip/
+
+    # Step 6 — Build the App
+    - name: Compile NPS Browser App
+      run: |
+        xcodebuild \
+          -project "NPS Browser.xcodeproj" \
+          -scheme "NPS Browser" \
+          -configuration Debug \
+          -destination 'platform=macOS' \
+          CODE_SIGNING_ALLOWED=NO \
+          build
