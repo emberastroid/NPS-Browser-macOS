@@ -118,6 +118,7 @@ jobs:
           -destination 'platform=macOS,arch=arm64' \
           ONLY_ACTIVE_ARCH=YES \
           CODE_SIGNING_ALLOWED=NO \
+          FRAMEWORK_SEARCH_PATHS="\$(SRCROOT)/Carthage/Build/Mac" \
           build
 
     # Step 7 — ALWAYS RUNS: Packages the app so you can download it from GitHub web UI
