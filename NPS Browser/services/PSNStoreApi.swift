@@ -10,6 +10,7 @@ import Foundation
 import Alamofire
 import AlamofireImage
 import Promises
+import AppKit
 
 class PSNStoreApi {
     var item: Item
