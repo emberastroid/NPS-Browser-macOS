@@ -108,7 +108,7 @@ jobs:
         cp Carthage/Checkouts/Zip/Zip/minizip/module.modulemap \
            Carthage/Build/Mac/Zip.framework/Headers/minizip/
 
-    # Step 6 — ALWAYS RUNS: Build the main App with Xcode 26 destination fixes
+    # Step 6 — Injects both Framework and Swift Include paths so module emissions succeed
     - name: Compile NPS Browser App
       run: |
         xcodebuild \
@@ -116,9 +116,11 @@ jobs:
           -scheme "NPS Browser" \
           -configuration Debug \
           -destination 'platform=macOS,arch=arm64' \
+          -sdk macosx \
           ONLY_ACTIVE_ARCH=YES \
           CODE_SIGNING_ALLOWED=NO \
           FRAMEWORK_SEARCH_PATHS="\$(SRCROOT)/Carthage/Build/Mac" \
+          SWIFT_INCLUDE_PATHS="\$(SRCROOT)/Carthage/Build/Mac" \
           build
 
     # Step 7 — ALWAYS RUNS: Packages the app so you can download it from GitHub web UI
