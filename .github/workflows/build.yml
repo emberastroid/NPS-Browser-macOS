@@ -104,10 +104,17 @@ jobs:
       run: |
         mkdir -p Carthage/Build/Mac/Zip.framework/Headers/minizip
         cp Carthage/Checkouts/Zip/Zip/minizip/*.h \
-           Carthage/Build/Mac/Zip.framework/Headers/minizip/
-        cp Carthage/Checkouts/Zip/Zip/minizip/module.modulemap \
-           Carthage/Build/Mac/Zip.framework/Headers/minizip/
+           Carthage/Build/Mac/Zip.framework/Headers/minizip/ || true
 
+        # Copy module.modulemap into the framework Modules directory where
+        # Clang/Swift expect it so the 'minizip' module can be resolved.
+        mkdir -p Carthage/Build/Mac/Zip.framework/Modules
+        if [ -f Carthage/Checkouts/Zip/Zip/minizip/module.modulemap ]; then
+          cp Carthage/Checkouts/Zip/Zip/minizip/module.modulemap \
+             Carthage/Build/Mac/Zip.framework/Modules/module.modulemap
+        else
+          echo "Warning: module.modulemap not found in Carthage/Checkouts/Zip/Zip/minizip"
+        fi
     # Step 6 — Injects both Framework and Swift Include paths so module emissions succeed
     - name: Compile NPS Browser App
       run: |
@@ -119,8 +126,9 @@ jobs:
           -sdk macosx \
           ONLY_ACTIVE_ARCH=YES \
           CODE_SIGNING_ALLOWED=NO \
-          FRAMEWORK_SEARCH_PATHS="\$(SRCROOT)/Carthage/Build/Mac" \
-          SWIFT_INCLUDE_PATHS="\$(SRCROOT)/Carthage/Build/Mac" \
+          FRAMEWORK_SEARCH_PATHS="$(SRCROOT)/Carthage/Build/Mac" \
+          HEADER_SEARCH_PATHS="$(SRCROOT)/Carthage/Build/Mac/Zip.framework/Headers $(SRCROOT)/Carthage/Build/Mac/Zip.framework/Headers/minizip" \
+          SWIFT_INCLUDE_PATHS="$(SRCROOT)/Carthage/Build/Mac $(SRCROOT)/Carthage/Build/Mac/Zip.framework/Headers/minizip" \
           build
 
     # Step 7 — Find the built .app, compress it, and upload as an artifact
