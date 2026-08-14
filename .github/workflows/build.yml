@@ -123,10 +123,25 @@ jobs:
           SWIFT_INCLUDE_PATHS="\$(SRCROOT)/Carthage/Build/Mac" \
           build
 
-    # Step 7 — ALWAYS RUNS: Packages the app so you can download it from GitHub web UI
-    - name: Compress and Upload App Artifact
+    # Step 7 — Find the built .app, compress it, and upload as an artifact
+    - name: Package build output
+      run: |
+        set -e
+        echo "Searching for built .app in DerivedData..."
+        APP_PATH=$(find $HOME/Library/Developer/Xcode/DerivedData -type d -name "NPS Browser.app" -print -quit)
+        if [ -z "$APP_PATH" ]; then
+          echo "No .app found under DerivedData. Listing DerivedData dirs for debugging:"
+          ls -la $HOME/Library/Developer/Xcode/DerivedData || true
+          echo "Failing the job because the app was not found."
+          exit 1
+        fi
+        echo "Found app: $APP_PATH"
+        ZIP_NAME=NPS-Browser-Mac-Build.zip
+        rm -f "$ZIP_NAME"
+        ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$ZIP_NAME"
+
+    - name: Upload App Artifact
       uses: actions/upload-artifact@v4
       with:
         name: NPS-Browser-Mac-Build
-        path: |
-          ~/Library/Developer/Xcode/DerivedData/*/Build/Products/Debug/NPS Browser.app
+        path: NPS-Browser-Mac-Build.zip
